@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    /* --- CORE THEME VARIABLES --- */
+    :root {
+      --bg-color: #f5f7fb;
+      --text-color: #333333;
+      --card-bg: #ffffff;
+      --header-color: #1a73e8;
+      --border-color: #d2e3fc;
+      --shadow: rgba(0,0,0,0.08);
+      --saved-bg: rgba(0, 0, 0, 0.05);
+      --archive-header: #64748b;
+      --remaining-color: #5f6368;
+      --grid-empty-border: #cbd5e1;
+      --grid-empty-bg: transparent;
+      --grid-fill-color: #34d399;
+      --grid-done-bg: #10b981;
+      --grid-done-text: #ffffff;
+    }
+
+    [data-theme="dark"] {
+      --bg-color: #0f172a;
+      --text-color: #f8fafc;
+      --card-bg: #1e293b;
+      --header-color: #38bdf8;
+      --border-color: #334155;
+      --shadow: rgba(0,0,0,0.3);
+      --saved-bg: rgba(255, 255, 255, 0.1);
+      --archive-header: #94a3b8;
+      --remaining-color: #94a3b8;
+      --grid-empty-border: #475569;
+      --grid-empty-bg: #1e293b;
+      --grid-fill-color: #0ea5e9;
+      --grid-done-bg: #0284c7;
+      --grid-done-text: #ffffff;
+    }
+
+    body { font-family: -apple-system, sans-serif; background-color: var(--bg-color); margin: 0; padding: 16px; color: var(--text-color); transition: background 0.3s, color 0.3s; overflow-x: hidden; }
+    
+    /* --- STICKY TOP CONTROLS --- */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background-color: var(--card-bg);
+      padding: 12px 16px;
+      margin: -16px -16px 16px -16px;
+      box-shadow: 0 2px 8px var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: background 0.3s;
+    }
+    .top-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+    .stats-container { display: flex; flex-direction: column; gap: 4px; }
+    .stats-text { font-size: 14px; font-weight: 700; }
+    .progress-box { width: 120px; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+    .progress-bar { height: 100%; width: 0%; background: #137333; transition: width 0.3s ease; }
+    
+    /* --- SLIM ROW SINGLE-LINE DASHBOARD GRID --- */
+    .room-grid {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      gap: 4px;
+      width: 100%;
+      padding-top: 6px;
+      border-top: 1px solid var(--border-color);
+    }
+    .grid-square {
+      position: relative;
+      flex: 1;
+      height: 34px;
+      min-width: 0; 
+      border-radius: 5px;
+      border: 1.5px solid var(--grid-empty-border);
+      background-color: var(--grid-empty-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+    .grid-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0%;
+      background-color: var(--grid-fill-color);
+      opacity: 0.35;
+      transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 1;
+    }
+    .grid-label { position: relative; z-index: 2; }
+    
+    /* Solid background paint rule (Preserves original label text layers) */
+    .grid-square.room-done {
+      background-color: var(--grid-done-bg) !important;
+      border-color: var(--grid-done-bg) !important;
+      color: var(--grid-done-text) !important;
+    }
+
+    /* Dark Mode Toggle Switch */
+    .theme-switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+    .theme-switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #38bdf8; }
+    input:checked + .slider:before { transform: translateX(24px); }
+
+    h2 { text-align: center; color: var(--header-color); margin-top: 8px; margin-bottom: 16px; }
+    
+    /* --- SECTION SEPARATORS --- */
+    .section-divider {
+      margin-top: 40px;
+      margin-bottom: 20px;
+      text-align: center;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: 1px;
+      color: var(--archive-header);
+      text-transform: uppercase;
+      border-bottom: 1px dashed var(--border-color);
+      padding-bottom: 8px;
+    }
+
+    /* --- ROOM GROUPS --- */
+    .room-block {
+      transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease, margin-bottom 0.5s;
+      max-height: 1000px;
+      opacity: 1;
+      margin-bottom: 16px;
+    }
+    .room-block.collapse-block {
+      max-height: 0 !important;
+      opacity: 0 !important;
+      margin-bottom: 0 !important;
+      pointer-events: none;
+    }
+
+    /* --- ROOM HEADERS --- */
+    .room-header {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--header-color);
+      margin-top: 12px;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+    .room-remaining-tag { font-size: 13px; font-weight: 600; color: var(--remaining-color); margin-left: 6px; }
+    
+    /* Archive View Header States */
+    .room-header.archive-partial {
+      font-size: 14px;
+      color: var(--archive-header);
+      border-bottom: 1px solid var(--border-color);
+      margin-top: 14px;
+    }
+    .room-header.completed { color: #137333 !important; border-bottom-color: #a7f3d0; }
+    
+    .room-actions { display: flex; gap: 12px; align-items: center; }
+    .btn-bulk { background: var(--saved-bg); border: none; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; color: var(--text-color); cursor: pointer; }
+
+    /* --- SMOOTH TRANSITION WRAPPERS --- */
+    .row-anim-wrapper {
+      max-height: 70px; 
+      opacity: 1;
+      margin-bottom: 8px;
+      transition: max-height 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease, margin-bottom 0.8s;
+    }
+    .row-anim-wrapper.collapse-active {
+      max-height: 0 !important;
+      opacity: 0 !important;
+      margin-bottom: 0 !important;
+    }
+
+    /* --- STUDENT ROWS --- */
+    .student-row { 
+      background: var(--card-bg); 
+      border-radius: 8px; 
+      padding: 10px 12px; 
+      box-shadow: 0 1px 3px var(--shadow); 
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .student-name { font-size: 16px; font-weight: 600; }
+    
+    /* Live State Colors */
+    .row-success { background-color: #e6f4ea !important; border: 1px solid #137333 !important; color: #137333; }
+    .row-late { background-color: #fef7e0 !important; border: 1px solid #b06000 !important; color: #b06000; }
+    .row-absent { background-color: #fce8e6 !important; border: 1px solid #c5221f !important; color: #c5221f; }
+    
+    [data-theme="dark"] .row-success { background-color: #064e3b !important; border: 1px solid #059669 !important; color: #a7f3d0; }
+    [data-theme="dark"] .row-late { background-color: #78350f !important; border: 1px solid #d97706 !important; color: #fde68a; }
+    [data-theme="dark"] .row-absent { background-color: #7f1d1d !important; border: 1px solid #dc2626 !important; color: #fca5a5; }
+
+    .btn-container { display: flex; gap: 8px; }
+    button { border: none; padding: 10px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; touch-action: manipulation; }
+    .btn-on-time { background-color: #e6f4ea; color: #137333; }
+    .btn-late { background-color: #fef7e0; color: #b06000; }
+    
+    [data-theme="dark"] .btn-on-time { background-color: #064e3b; color: #a7f3d0; }
+    [data-theme="dark"] .btn-late { background-color: #78350f; color: #fde68a; }
+
+    .saved-text { font-size: 13px; font-weight: bold; padding: 8px 12px; background: var(--saved-bg); border-radius: 6px; text-align: right; }
+    #loading { text-align: center; margin-top: 50px; color: #666; font-weight: bold;}
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <div class="top-row">
+      <div class="stats-container">
+        <div class="stats-text" id="stats-counter">0 / 0 Done</div>
+        <div class="progress-box"><div class="progress-bar" id="stats-progress"></div></div>
+      </div>
+      <div>
+        <label class="theme-switch">
+          <input type="checkbox" id="theme-toggle" onclick="toggleTheme()">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+    
+    <div class="room-grid" id="dashboard-grid"></div>
+  </div>
+
+  <h2>Lights Out</h2>
+  <div id="loading">Loading Rooms...</div>
+  
+  <div id="active-zone"></div>
+  <div id="archive-divider" class="section-divider" style="display:none;">Completed / Archived</div>
+  <div id="archive-zone"></div>
+
+  <script>
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyA6mUrZ3cLtql5vVPhN6BHc3C1mSIj6oQwJTgScSWVNhtByfrX6pvh4YTYPvNEomSciA/exec";
+    let globalStudents = [];
+    let runningAnimationCount = 0; 
+
+    function vibeLight() { if (navigator.vibrate) navigator.vibrate(15); }
+    function vibeDouble() { if (navigator.vibrate) navigator.vibrate([40, 40, 40]); }
+    function vibeUndo() { if (navigator.vibrate) navigator.vibrate(30); }
+
+    window.onload = function() {
+      if (localStorage.getItem('theme') === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.getElementById('theme-toggle').checked = true;
+      }
+      
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "getRoster" })
+      })
+      .then(res => res.json())
+      .then(data => {
+        globalStudents = data;
+        buildDashboardGrid(); 
+        renderSplitRoster();
+      });
+    };
+
+    function toggleTheme() {
+      vibeLight();
+      if (document.getElementById('theme-toggle').checked) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+      }
+    }
+
+    function buildDashboardGrid() {
+      const gridContainer = document.getElementById('dashboard-grid');
+      gridContainer.innerHTML = '';
+      
+      let distinctRooms = [...new Set(globalStudents.map(s => s.room))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+      
+      distinctRooms.forEach(roomNum => {
+        const square = document.createElement('div');
+        square.className = 'grid-square';
+        square.id = 'grid-sq-' + roomNum;
+        
+        square.innerHTML = `
+          <div class="grid-fill" id="grid-fill-${roomNum}"></div>
+          <span class="grid-label" id="grid-label-${roomNum}">${roomNum}</span>
+        `;
+        gridContainer.appendChild(square);
+      });
+    }
+
+    function calculateStats() {
+      const total = globalStudents.length;
+      const marked = globalStudents.filter(s => s.loggedTime && s.loggedTime !== "").length;
+      
+      document.getElementById('stats-counter').innerText = `${marked} / ${total} Completed`;
+      const percentage = total > 0 ? (marked / total) * 100 : 0;
+      document.getElementById('stats-progress').style.width = percentage + '%';
+      
+      document.getElementById('archive-divider').style.display = marked > 0 ? 'block' : 'none';
+      
+      updateDashboardProgress();
+    }
+
+    function updateDashboardProgress() {
+      let roomMetrics = {};
+      globalStudents.forEach(s => {
+        if (!roomMetrics[s.room]) roomMetrics[s.room] = { total: 0, marked: 0 };
+        roomMetrics[s.room].total++;
+        if (s.loggedTime && s.loggedTime !== "") roomMetrics[s.room].marked++;
+      });
+
+      Object.keys(roomMetrics).forEach(roomNum => {
+        const fillEl = document.getElementById(`grid-fill-${roomNum}`);
+        const squareEl = document.getElementById(`grid-sq-${roomNum}`);
+        const labelEl = document.getElementById(`grid-label-${roomNum}`);
+        
+        if (fillEl && squareEl && labelEl) {
+          let m = roomMetrics[roomNum];
+          let fillPercent = (m.marked / m.total) * 100;
+          
+          fillEl.style.height = fillPercent + '%';
+          
+          // Preserves original room number text label layout in all states
+          labelEl.innerText = roomNum; 
+          
+          if (m.marked === m.total) {
+            squareEl.className = 'grid-square room-done';
+          } else {
+            squareEl.className = 'grid-square';
+          }
+        }
+      });
+    }
+
+    function renderSplitRoster() {
+      if (runningAnimationCount > 0) return;
+
+      const activeZone = document.getElementById('active-zone');
+      const archiveZone = document.getElementById('archive-zone');
+      
+      activeZone.innerHTML = '';
+      archiveZone.innerHTML = '';
+      
+      let roomMetrics = {};
+      globalStudents.forEach(s => {
+        if (!roomMetrics[s.room]) roomMetrics[s.room] = { total: 0, marked: 0 };
+        roomMetrics[s.room].total++;
+        if (s.loggedTime && s.loggedTime !== "") roomMetrics[s.room].marked++;
+      });
+
+      let distinctRooms = [...new Set(globalStudents.map(s => s.room))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+
+      distinctRooms.forEach(roomNum => {
+        let metrics = roomMetrics[roomNum];
+        let roomKids = globalStudents.filter(s => s.room === roomNum).sort((a,b) => a.name.localeCompare(b.name));
+        
+        let activeKids = roomKids.filter(s => !s.loggedTime || s.loggedTime === "");
+        let archivedKids = roomKids.filter(s => s.loggedTime && s.loggedTime !== "");
+
+        // 1. RENDER ACTIVE ZONE
+        if (activeKids.length > 0) {
+          const block = document.createElement('div');
+          block.className = 'room-block';
+          block.id = 'block-act-' + roomNum;
+
+          const header = document.createElement('div');
+          header.className = 'room-header';
+          header.id = 'room-hdr-act-' + roomNum;
+          header.innerHTML = `
+            <span>Room ${roomNum} <span class="room-remaining-tag" id="ratio-act-${roomNum}">(${metrics.marked}/${metrics.total} Done)</span></span>
+            <div class="room-actions">
+              <button class="btn-bulk" onclick="bulkMarkRoom('${roomNum}')">⚡ Bulk On Time</button>
+            </div>
+          `;
+          block.appendChild(header);
+
+          activeKids.forEach(student => {
+            let origIndex = globalStudents.findIndex(s => s.name === student.name);
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'row-anim-wrapper';
+            wrapper.id = 'wrapper-' + origIndex;
+            wrapper.appendChild(createStudentRow(student, origIndex, false));
+            
+            block.appendChild(wrapper);
+          });
+          activeZone.appendChild(block);
+        }
+
+        // 2. RENDER ARCHIVE ZONE
+        if (archivedKids.length > 0) {
+          const header = document.createElement('div');
+          header.className = 'room-header';
+          header.id = 'room-hdr-arc-' + roomNum;
+          
+          if (metrics.total === metrics.marked) {
+            header.className = 'room-header completed';
+            header.innerHTML = `<span>Room ${roomNum} ✅</span>`;
+          } else {
+            header.className = 'room-header archive-partial';
+            header.innerHTML = `<span>Room ${roomNum} (${metrics.marked}/${metrics.total} Checked In)</span>`;
+          }
+          archiveZone.appendChild(header);
+
+          archivedKids.forEach(student => {
+            let origIndex = globalStudents.findIndex(s => s.name === student.name);
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'row-anim-wrapper';
+            wrapper.appendChild(createStudentRow(student, origIndex, true));
+            
+            archiveZone.appendChild(wrapper);
+          });
+        }
+      });
+
+      calculateStats();
+    }
+
+    function createStudentRow(student, origIndex, isArchived) {
+      const row = document.createElement('div');
+      row.className = 'student-row';
+      row.id = 'row-' + origIndex;
+      
+      let safeName = student.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+      let actionHtml = '';
+      
+      if (isArchived) {
+         row.setAttribute('onpointerdown', `startUndoPress('${safeName}', ${origIndex})`);
+         row.setAttribute('onpointerup', `endUndoPress()`);
+         row.setAttribute('onpointerleave', `cancelUndoPress()`);
+         row.setAttribute('onpointercancel', `cancelUndoPress()`);
+         row.setAttribute('oncontextmenu', 'return false;');
+         
+         actionHtml = `<div class="saved-text">${student.loggedTime}</div>`;
+         if (student.loggedTime === "On Time") row.classList.add('row-success');
+         else if (student.loggedTime === "Absent") row.classList.add('row-absent');
+         else row.classList.add('row-late');
+      } else {
+         actionHtml = `
+          <div class="btn-container" id="btns-${origIndex}">
+            <button class="btn-on-time" 
+                    onpointerdown="startMarkPress('${safeName}', ${origIndex})" 
+                    onpointerup="endMarkPress('${safeName}', 'on_time', ${origIndex})" 
+                    onpointerleave="cancelMarkPress()" 
+                    onpointercancel="cancelMarkPress()"
+                    oncontextmenu="return false;">On Time</button>
+            <button class="btn-late" onclick="logTime('${safeName}', 'late', ${origIndex})">Log Time</button>
+          </div>
+         `;
+      }
+
+      row.innerHTML = `
+        <div class="student-name">${student.name}</div>
+        <div id="action-holder-${origIndex}">${actionHtml}</div>
+      `;
+      return row;
+    }
+
+    function startMarkPress(name, index) {
+      isMarkLongPress = false;
+      markTimer = setTimeout(() => {
+        isMarkLongPress = true;
+        vibeDouble();
+        logTime(name, 'absent', index);
+      }, 500); 
+    }
+    function endMarkPress(name, type, index) {
+      clearTimeout(markTimer);
+      if (!isMarkLongPress) {
+        vibeLight();
+        logTime(name, type, index); 
+      }
+    }
+    function cancelMarkPress() { clearTimeout(markTimer); }
+
+    function startUndoPress(name, index) {
+      isUndoLongPress = false;
+      undoTimer = setTimeout(() => {
+        isUndoLongPress = true;
+        vibeUndo();
+        undoTap(name, index);
+      }, 600); 
+    }
+    function endUndoPress() { clearTimeout(undoTimer); }
+    function cancelUndoPress() { clearTimeout(undoTimer); }
+
+    function logTime(name, type, index) {
+      let match = globalStudents[index];
+      const targetRow = document.getElementById('row-' + index);
+      const wrapper = document.getElementById('wrapper-' + index);
+      const holder = document.getElementById('action-holder-' + index);
+      
+      if (type === 'late') vibeLight();
+      
+      if (targetRow && holder) {
+        holder.innerHTML = `<div class="saved-text">...</div>`;
+        targetRow.className = 'student-row';
+        if (type === 'on_time') targetRow.classList.add('row-success');
+        else if (type === 'absent') targetRow.classList.add('row-absent');
+        else targetRow.classList.add('row-late');
+      }
+      
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "logTime", name: name, type: type })
+      })
+      .then(res => res.json())
+      .then(data => {
+        match.loggedTime = data.time;
+        if (holder) holder.innerHTML = `<div class="saved-text">${data.time}</div>`;
+        
+        updateHeaderRatio(match.room);
+        calculateStats(); 
+
+        if (wrapper) {
+          runningAnimationCount++;
+          wrapper.classList.add('collapse-active'); 
+          
+          setTimeout(() => {
+            runningAnimationCount--;
+            checkBlockCompletion(match.room);
+            renderSplitRoster(); 
+          }, 820);
+        } else {
+          renderSplitRoster();
+        }
+      });
+    }
+
+    function updateHeaderRatio(roomNum) {
+      let total = globalStudents.filter(s => s.room === roomNum).length;
+      let marked = globalStudents.filter(s => s.room === roomNum && s.loggedTime && s.loggedTime !== "").length;
+      const tag = document.getElementById('ratio-act-' + roomNum);
+      if (tag) tag.innerText = `(${marked}/${total} Done)`;
+    }
+
+    function checkBlockCompletion(roomNum) {
+      let unmarkedLeft = globalStudents.filter(s => s.room === roomNum && (!s.loggedTime || s.loggedTime === "")).length;
+      if (unmarkedLeft === 0) {
+        const block = document.getElementById('block-act-' + roomNum);
+        if (block) block.classList.add('collapse-block'); 
+      }
+    }
+
+    function undoTap(name, index) {
+      let match = globalStudents[index];
+      match.loggedTime = "";
+      renderSplitRoster();
+      updateDashboardProgress(); 
+
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "clearRow", name: name })
+      });
+    }
+
+    function bulkMarkRoom(roomNum) {
+      vibeLight();
+      let unmarkedInRoom = globalStudents.filter(s => s.room === roomNum && (!s.loggedTime || s.loggedTime === ""));
+      
+      unmarkedInRoom.forEach((student, seqIndex) => {
+        let origIndex = globalStudents.findIndex(s => s.name === student.name);
+        setTimeout(() => {
+          logTime(student.name, 'on_time', origIndex);
+        }, seqIndex * 150);
+      });
+    }
+  </script>
+</body>
+</html>
